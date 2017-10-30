@@ -19,6 +19,8 @@
 #include <stdbool.h>
 
 #include <nds.h>
+#include <ncgc/ntrcard.h>
+#include <ncgc/platform/ntr.h>
 
 PrintConsole topScreen;
 PrintConsole bottomScreen;
