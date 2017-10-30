@@ -33,6 +33,8 @@
 
 PrintConsole topScreen;
 PrintConsole bottomScreen;
+char secure_area[0x4000];
+ncgc_ncard_t card;
 
 typedef struct {
     uint32_t magic;
@@ -192,7 +194,6 @@ int main(void) {
     consoleClear();
     iprintf("Checking for %s FIRM\n", dev ? "dev" : "retail");
 
-    ncgc_ncard_t card;
     ncgc_nplatform_ntr_init(&card, reset_card);
     int32_t r;
 
@@ -205,14 +206,13 @@ int main(void) {
     // the SRL header may not be present in ntrboot carts
     card.hdr.key1_romcnt = card.key1.romcnt = 0x81808F8;
     card.hdr.key2_romcnt = card.key2.romcnt = 0x416657;
-    ncgc_nsetup_blowfish_as_is(&card, (void *) blowfish_key);
+    ncgc_nsetup_blowfish_as_is(&card, (const void *) blowfish_key);
     r = ncgc_nbegin_key1(&card);
     if (r) {
         iprintf("ncgc_nbegin_key1 failed:\n %ld 0x%08lX 0x%08lX\n", r, card.raw_chipid, card.key1.chipid);
         goto fail;
     }
 
-    char secure_area[0x4000];
     r = ncgc_nread_secure_area(&card, secure_area);
     if (r) {
         iprintf("ncgc_nread_secure_area failed:\n %ld 0x%08lX 0x%08lX\n", r, card.raw_chipid, card.key1.chipid);
