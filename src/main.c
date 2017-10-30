@@ -185,7 +185,7 @@ int main(void) {
         }
     }
 
-    const char *const blowfish_key = dev ? blowfish_dev : blowfish_retail;
+    const char *const blowfish_key = dev ? blowfish_dev_bin : blowfish_retail_bin;
     const char *const signature = dev ? signature_dev : signature_retail;
     const char *const aes_key = dev ? aeskey_dev : aeskey_retail;
 

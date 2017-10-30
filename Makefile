@@ -6,50 +6,54 @@ endif
 include $(DEVKITARM)/ds_rules
 
 TARGET		:=	dsfirmverify
+BUILD		:=	obj
 
-CFILES		:=	main.c aes/aes.c sha256.c
+CFILES		:=	main.c aes.c sha256.c
+BINFILES	:=	blowfish_retail.bin blowfish_dev.bin
 
-ARCH		:=	-marm
+ARCH		:=	-mthumb -mthumb-interwork
 CFLAGS		:=	-g $(ARCH) -O2 -fdiagnostics-color=always -D_GNU_SOURCE -DARM9 \
 				-Wall -Wextra -pedantic -std=gnu11 \
 				-march=armv5te -mtune=arm946e-s \
 				-fomit-frame-pointer -ffast-math \
-				-ffunction-sections -fdata-sections \
-				-I$(LIBNDS)/include -Ilibncgc/include/
+				-I$(LIBNDS)/include -I$(TOPDIR)/libncgc/include
 ASFLAGS		:=	-g $(ARCH)
-LDFLAGS		=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(@).map \
-				-L$(LIBNDS)/lib -Llibncgc/out/ntr
+LDFLAGS		=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 LIBS		:=	-lnds9 -lncgc
 
-# ------------------------------------------------------------------------------
+ifneq ($(BUILD),$(notdir $(CURDIR)))
 
-OBJFILES	:=	$(OBJFILES) $(patsubst %,obj/%.o,$(CFILES)) \
-				obj/blowfish_retail.bin.o obj/blowfish_dev.bin.o
+export TOPDIR	:=	$(CURDIR)
 
-$(TARGET).nds: obj/$(TARGET).nds
-	@cp $^ $@
-	@echo Built $@
+.PHONY: $(BUILD) libncgc clean
 
-obj/$(TARGET).elf: $(OBJFILES) libncgc/out/ntr/libncgc.a
-	@echo Linking $@
-	@$(CC) $(LDFLAGS) -o $@ $(OBJFILES) $(LIBS)
+$(BUILD): libncgc
+	@[ -d $@ ] || mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
-obj/%.c.o: src/%.c
-	@mkdir -p $(dir $@)
-	@echo $^ =\> $@
-	@$(CC) -MMD -MP -MF obj/$*.d $(CFLAGS) -c $< -o $@ $(ERROR_FILTER)
-
-obj/%.bin.o: src/%.bin
-	@mkdir -p $(dir $@)
-	@echo $^ =\> $@
-	@$(PREFIX)ld -r -b binary $< -o $@
-
-libncgc/out/ntr/libncgc.a:
-	@$(MAKE) PLATFORM=ntr -C libncgc
+libncgc:
+	@$(MAKE) PLATFORM=ntr -C $(CURDIR)/libncgc
 
 clean:
-	@rm -vrf obj $(TARGET).nds
+	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds
 
-.PHONY: clean
+else
 
--include $(patsubst %,obj/%.d,$(CFILES))
+export LD		:=	$(CC)
+export VPATH	:=	$(TOPDIR)/src $(TOPDIR)/src/aes
+export OUTPUT	:=	$(TOPDIR)/$(TARGET)
+export DEPSDIR	:=	$(TOPDIR)/$(BUILD)
+export OFILES	:=	$(BINFILES:.bin=.o) $(CFILES:.c=.o)
+export LIBPATHS	:=	-L$(LIBNDS)/lib -L$(TOPDIR)/libncgc/out/ntr
+DEPENDS	:=	$(OFILES:.o=.d)
+
+$(OUTPUT).nds: $(OUTPUT).elf
+$(OUTPUT).elf: $(OFILES)
+
+%.o: %.bin
+	@echo $(notdir $<)
+	$(bin2o)
+
+-include $(DEPENDS)
+
+endif
