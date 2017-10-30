@@ -37,4 +37,9 @@ obj/%.c.o: src/%.c
 	@echo $^ =\> $@
 	@$(CC) -MMD -MP -MF obj/$*.d $(CFLAGS) -c $< -o $@ $(ERROR_FILTER)
 
+clean:
+	rm -vrf obj $(TARGET).nds
+
+.PHONY: clean
+
 -include $(patsubst %,obj/%.d,$(CFILES))
