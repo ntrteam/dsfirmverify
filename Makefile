@@ -17,7 +17,8 @@ CFLAGS		:=	-g $(ARCH) -O2 -fdiagnostics-color=always -D_GNU_SOURCE -DARM9 \
 				-ffunction-sections -fdata-sections \
 				-I$(LIBNDS)/include -Ilibncgc/include/
 ASFLAGS		:=	-g $(ARCH)
-LDFLAGS		:=	-specs=ds_arm9.specs -g $(ARCH) -L$(LIBNDS)/lib -Llibncgc/out/ntr
+LDFLAGS		=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(@).map \
+				-L$(LIBNDS)/lib -Llibncgc/out/ntr
 LIBS		:=	-lnds9 -lncgc
 
 # ------------------------------------------------------------------------------
