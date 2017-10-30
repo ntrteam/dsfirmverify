@@ -75,7 +75,9 @@ static void wait_for_keys(uint32_t keys) {
 }
 
 static bool reset_card(void) {
-    iprintf("Reinsert the card, then press A.\n");
+    iprintf("Remove and reinsert the card,\n"
+            "then press A.\n"
+            "(You may hotswap now.)\n");
     wait_for_keys(KEY_A);
     return true;
 }
@@ -284,7 +286,7 @@ int main(void) {
     if (ok) {
         iprintf("All OK.\n");
     } else {
-        iprintf("Errors reported..\n");
+        iprintf("Errors reported.\n");
     }
 
 fail:
