@@ -7,7 +7,7 @@ include $(DEVKITARM)/ds_rules
 
 TARGET		:=	dsfirmverify
 
-CFILES		:=	main.c
+CFILES		:=	main.c aes/aes.c sha256.c
 
 ARCH		:=	-marm
 CFLAGS		:=	-g $(ARCH) -O2 -fdiagnostics-color=always -D_GNU_SOURCE -DARM9 \
@@ -23,7 +23,8 @@ LIBS		:=	-lnds9 -lncgc
 
 # ------------------------------------------------------------------------------
 
-OBJFILES	:=	$(OBJFILES) $(patsubst %,obj/%.o,$(CFILES))
+OBJFILES	:=	$(OBJFILES) $(patsubst %,obj/%.o,$(CFILES)) \
+				obj/blowfish_retail.bin.o obj/blowfish_dev.bin.o
 
 $(TARGET).nds: obj/$(TARGET).nds
 	@cp $^ $@
@@ -34,9 +35,14 @@ obj/$(TARGET).elf: $(OBJFILES) libncgc/out/ntr/libncgc.a
 	@$(CC) $(LDFLAGS) -o $@ $(OBJFILES) $(LIBS)
 
 obj/%.c.o: src/%.c
-	@mkdir -p obj
+	@mkdir -p $(dir $@)
 	@echo $^ =\> $@
 	@$(CC) -MMD -MP -MF obj/$*.d $(CFLAGS) -c $< -o $@ $(ERROR_FILTER)
+
+obj/%.bin.o: src/%.bin
+	@mkdir -p $(dir $@)
+	@echo $^ =\> $@
+	@$(PREFIX)ld -r -b binary $< -o $@
 
 libncgc/out/ntr/libncgc.a:
 	@$(MAKE) PLATFORM=ntr -C libncgc

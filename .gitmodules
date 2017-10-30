@@ -1,3 +1,6 @@
 [submodule "libncgc"]
 	path = libncgc
 	url = https://github.com/angelsl/libncgc.git
+[submodule "src/aes"]
+	path = src/aes
+	url = https://github.com/kokke/tiny-AES-c.git
