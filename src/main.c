@@ -33,8 +33,6 @@
 
 PrintConsole topScreen;
 PrintConsole bottomScreen;
-char secure_area[0x4000];
-ncgc_ncard_t card;
 
 typedef struct {
     uint32_t magic;
@@ -75,8 +73,9 @@ static void wait_for_keys(uint32_t keys) {
 }
 
 static bool reset_card(void) {
-    iprintf("Remove and reinsert the card,\n"
-            "then press A.\n"
+    iprintf("Remove the card FULLY from the\n"
+            "slot. Reinsert the card, then\n"
+            "press A.\n"
             "(You may hotswap now.)\n");
     wait_for_keys(KEY_A);
     return true;
@@ -103,6 +102,7 @@ static int32_t read_card(ncgc_ncard_t *const card, uint32_t address, uint32_t si
     return 0;
 }
 
+mbedtls_sha256_context sha256_ctx;
 static bool verify_section(int i,
                            ncgc_ncard_t *const card,
                            const firm_hdr_t *const hdr,
@@ -115,9 +115,8 @@ static bool verify_section(int i,
     memcpy(iv, &hdr->sections[i], 12);
     memcpy(iv + 12, &hdr->sections[i].size, 4);
 
-    mbedtls_sha256_context ctx;
-    mbedtls_sha256_init(&ctx);
-    mbedtls_sha256_starts(&ctx, 0);
+    mbedtls_sha256_init(&sha256_ctx);
+    mbedtls_sha256_starts(&sha256_ctx, 0);
 
     uint32_t cur_addr = hdr->sections[i].offset + 0x7E00;
     uint32_t size_left = hdr->sections[i].size;
@@ -131,7 +130,7 @@ static bool verify_section(int i,
             return false;
         }
         AES_CBC_decrypt_buffer(pt, ct, cur_size, key, iv);
-        mbedtls_sha256_update(&ctx, pt, cur_size);
+        mbedtls_sha256_update(&sha256_ctx, pt, cur_size);
 
         if (cur_size == block_size) {
             // not last block (or size is multiple of block size, whatever)
@@ -143,11 +142,11 @@ static bool verify_section(int i,
     }
 
     unsigned char hash[0x20];
-    mbedtls_sha256_finish(&ctx, hash);
+    mbedtls_sha256_finish(&sha256_ctx, hash);
     // this just zeroes the struct
     // FIRM hashes are top secret!
     // hah, who am I kidding, don't even bother
-    // mbedtls_sha256_free(&ctx);
+    // mbedtls_sha256_free(&sha256_ctx);
     if (memcmp(hash, hdr->sections[i].sha256, 0x20)) {
         iprintf("Sect %d invalid hash\n", i);
         return false;
@@ -157,19 +156,40 @@ static bool verify_section(int i,
     return true;
 }
 
-int main(void) {
-    videoSetMode(MODE_0_2D);
-	videoSetModeSub(MODE_0_2D);
+static void print_header_hash(const firm_hdr_t *const hdr) {
+    mbedtls_sha256_init(&sha256_ctx);
+    mbedtls_sha256_starts(&sha256_ctx, 0);
+    mbedtls_sha256_update(&sha256_ctx, (const unsigned char *) hdr, sizeof(firm_hdr_t));
+    unsigned char hash[0x20];
+    mbedtls_sha256_finish(&sha256_ctx, hash);
+    iprintf("FIRM header SHA256:\n");
+    for (unsigned int i = 0; i < sizeof(hash); ++i) {
+        iprintf("%02x", hash[i]);
+    }
+    iprintf("\n");
+}
 
-	vramSetBankA(VRAM_A_MAIN_BG);
-	vramSetBankC(VRAM_C_SUB_BG);
+static void print_magic(const firm_hdr_t *const hdr) {
+    unsigned int start;
+    for (start = sizeof(hdr->garbage); start; --start) {
+        if (hdr->garbage[start-1] < 0x20 || hdr->garbage[start-1] > 0x7E) {
+            break;
+        }
+    }
+    iprintf("FIRM reserved area magic:\n");
+    for (; start < sizeof(hdr->garbage); ++start) {
+        iprintf("%c", hdr->garbage[start]);
+    }
+    iprintf("\n");
+}
 
-    consoleInit(&topScreen, 3, BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
-	consoleInit(&bottomScreen, 3, BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true);
+char secure_area[0x4000];
+ncgc_ncard_t card;
+void do_check(void) {
+    consoleSelect(&bottomScreen);
+    consoleClear();
     consoleSelect(&topScreen);
-
-    sysSetBusOwners(true, true);
-
+    consoleClear();
     bool dev = false;
     iprintf("Press X for retail FIRM\n"
             "      Y for dev FIRM\n");
@@ -220,6 +240,9 @@ int main(void) {
         iprintf("ncgc_nread_secure_area failed:\n %ld 0x%08lX 0x%08lX\n", r, card.raw_chipid, card.key1.chipid);
         goto fail;
     }
+
+    consoleClear();
+    iprintf("Checking for %s FIRM\n", dev ? "dev" : "retail");
 
     firm_hdr_t *hdr = (firm_hdr_t *) (secure_area + 0x3E00);
     if (memcmp(&hdr->magic, "FIRM", 4)) {
@@ -289,8 +312,33 @@ int main(void) {
         iprintf("Errors reported.\n");
     }
 
+    consoleSelect(&bottomScreen);
+    print_magic(hdr);
+    iprintf("\n");
+    print_header_hash(hdr);
+    consoleSelect(&topScreen);
+
 fail:
-    iprintf("Press B to exit.\n");
+    iprintf("Press B to check another cart.\n");
     wait_for_keys(KEY_B);
+}
+
+int main(void) {
+    videoSetMode(MODE_0_2D);
+	videoSetModeSub(MODE_0_2D);
+
+	vramSetBankA(VRAM_A_MAIN_BG);
+	vramSetBankC(VRAM_C_SUB_BG);
+
+    consoleInit(&topScreen, 3, BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
+	consoleInit(&bottomScreen, 3, BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true);
+    consoleSelect(&topScreen);
+
+    sysSetBusOwners(true, true);
+
+    while (true) {
+        do_check();
+    }
+
     return 0;
 }
